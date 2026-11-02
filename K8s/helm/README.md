@@ -49,14 +49,11 @@ By default the `payment` service uses https://www.paypal.com as the pseudo payme
 $ helm install --set payment.gateway=https://foobar.com ...
 ```
 
-## Website Monitoring / End-User Monitoring
-
 Optionally Website Monitoring / End-User Monitoring can be enabled for the web pages. Take a look at the [documentation](https://docs.instana.io/website_monitoring/) to see how to get a key and an endpoint url.
 
 ```shell
 $ helm install \
-    --set eum.key=xxxxxxxxx \
-    --set eum.url=https://eum-eu-west-1.instana.io \
+
     ...
 ```
 
@@ -84,8 +81,6 @@ $ helm install robot-shop --set openshift=true helm
 
 | Key              | Default | Type   | Description |
 | ---------------- | ------- | ------ | ----------- |
-| eum.key          | null    | string | EUM Access Key |
-| eum.url          | https://eum-eu-west-1.instana.io | url | EUM endpoint URL |
 | image.pullPolicy | IfNotPresent | string | Kubernetes pull policy. One of Always,IfNotPresent, or Never. |
 | image.repo       | robotshop | string | Base docker repository to pull the images from. |
 | image.version    | latest | string | Docker tag to pull. |

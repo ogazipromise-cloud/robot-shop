@@ -1,0 +1,19 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: robot-shop-cart
+  namespace: observability
+  labels:
+    release: monitoring
+spec:
+  namespaceSelector:
+    matchNames:
+      - robot-shop
+  selector:
+    matchLabels:
+      monitoring: enabled
+      app.kubernetes.io/managed-by: Helm
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s

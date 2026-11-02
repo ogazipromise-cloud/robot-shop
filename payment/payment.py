@@ -1,6 +1,5 @@
 import random
 
-import instana
 import os
 import sys
 import time
@@ -20,6 +19,36 @@ from prometheus_client import Counter, Histogram
 
 app = Flask(__name__)
 app.logger.setLevel(logging.INFO)
+@app.after_request
+def record_http_metrics(response):
+    # Exclude monitoring endpoints
+    if request.path in ['/metrics', '/health']:
+        return response
+
+    route = request.url_rule.rule if request.url_rule else 'unmatched'
+    method = request.method
+    status_code = str(response.status_code)
+
+    PromMetrics['HTTP_REQUESTS'].labels(
+        method, route, status_code
+    ).inc()
+
+    if response.status_code >= 400:
+        PromMetrics['HTTP_ERRORS'].labels(
+            method, route, status_code
+        ).inc()
+
+    duration = time.time() - request.start_time
+    PromMetrics['HTTP_DURATION'].labels(
+        method, route, status_code
+    ).observe(duration)
+
+    return response
+
+
+@app.before_request
+def start_http_timer():
+    request.start_time = time.time()
 
 CART = os.getenv('CART_HOST', 'cart')
 USER = os.getenv('USER_HOST', 'user')
@@ -31,11 +60,36 @@ PromMetrics['SOLD_COUNTER'] = Counter('sold_count', 'Running count of items sold
 PromMetrics['AUS'] = Histogram('units_sold', 'Avergae Unit Sale', buckets=(1, 2, 5, 10, 100))
 PromMetrics['AVS'] = Histogram('cart_value', 'Avergae Value Sale', buckets=(100, 200, 500, 1000, 2000, 5000, 10000))
 
+# HTTP request metrics
+PromMetrics['HTTP_REQUESTS'] = Counter(
+    'http_requests_total',
+    'Total number of HTTP requests',
+    ['method', 'route', 'status_code']
+)
+
+PromMetrics['HTTP_ERRORS'] = Counter(
+    'http_request_errors_total',
+    'Total number of HTTP errors',
+    ['method', 'route', 'status_code']
+)
+
+PromMetrics['HTTP_DURATION'] = Histogram(
+    'http_request_duration_seconds',
+    'HTTP request duration in seconds',
+    ['method', 'route', 'status_code'],
+    buckets=(0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5)
+)
+
+from werkzeug.exceptions import HTTPException
 
 @app.errorhandler(Exception)
 def exception_handler(err):
     app.logger.error(str(err))
-    return str(err), 500
+
+    if isinstance(err, HTTPException):
+        return err.description, err.code
+
+    return 'Internal Server Error', 500
 
 @app.route('/health', methods=['GET'])
 def health():

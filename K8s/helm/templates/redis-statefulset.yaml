@@ -27,13 +27,7 @@ spec:
         volumeMounts:
           - name: data
             mountPath: /mnt/redis
-        resources:
-          limits:
-            cpu: 200m
-            memory: 100Mi
-          requests:
-            cpu: 100m
-            memory: 50Mi
+        resources: {{- toYaml .Values.resources.redis | nindent 10 }}
       restartPolicy: Always
       {{- with .Values.redis.affinity }}
       affinity:

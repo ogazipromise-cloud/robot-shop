@@ -23,13 +23,7 @@ spec:
         imagePullPolicy: {{ .Values.image.pullPolicy }}
         ports:
         - containerPort: 80
-        resources:
-          limits:
-            cpu: 200m
-            memory: 100Mi
-          requests:
-            cpu: 100m
-            memory: 50Mi
+        resources: {{- toYaml .Values.resources.ratings | nindent 10 }}
         readinessProbe:
           httpGet:
             path: /_health

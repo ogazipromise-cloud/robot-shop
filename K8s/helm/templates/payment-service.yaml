@@ -4,6 +4,7 @@ metadata:
   name: payment
   labels:
     service: payment
+    monitoring: enabled
 spec:
   ports:
   - name: http

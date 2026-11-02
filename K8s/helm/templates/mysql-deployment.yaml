@@ -27,13 +27,7 @@ spec:
             add: ["NET_ADMIN"]
         ports:
         - containerPort: 3306
-        resources:
-          limits:
-            cpu: 200m
-            memory: 1024Mi
-          requests:
-            cpu: 100m
-            memory: 700Mi
+        resources: {{- toYaml .Values.resources.mysql | nindent 10 }}
       restartPolicy: Always
       {{- with .Values.mysql.affinity }}
       affinity:

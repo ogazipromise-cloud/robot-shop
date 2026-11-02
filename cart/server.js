@@ -1,12 +1,3 @@
-const instana = require('@instana/collector');
-// init tracing
-// MUST be done before loading anything else!
-instana({
-    tracing: {
-        enabled: true
-    }
-});
-
 const redis = require('redis');
 const request = require('request');
 const bodyParser = require('body-parser');
@@ -22,7 +13,28 @@ const counter = new promClient.Counter({
     help: 'running count of items added to cart',
     registers: [register]
 });
+// HTTP request metrics
+const httpRequestsTotal = new promClient.Counter({
+    name: 'http_requests_total',
+    help: 'Total number of HTTP requests',
+    labelNames: ['method', 'route', 'status_code'],
+    registers: [register]
+});
 
+const httpRequestErrors = new promClient.Counter({
+    name: 'http_request_errors_total',
+    help: 'Total number of HTTP errors',
+    labelNames: ['method', 'route', 'status_code'],
+    registers: [register]
+});
+
+const httpRequestDuration = new promClient.Histogram({
+    name: 'http_request_duration_seconds',
+    help: 'HTTP request duration in seconds',
+    labelNames: ['method', 'route', 'status_code'],
+    buckets: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5],
+    registers: [register]
+});
 
 var redisConnected = false;
 
@@ -41,36 +53,35 @@ const expLogger = expPino({
 const app = express();
 
 app.use(expLogger);
-
+// HTTP request metrics middleware
 app.use((req, res, next) => {
-    res.set('Timing-Allow-Origin', '*');
-    res.set('Access-Control-Allow-Origin', '*');
+    const start = process.hrtime();
+
+    // Capture the matched route after Express processes the request.
+    res.on('finish', () => {
+        if (req.path === '/metrics' || req.path === '/health') {
+            return;
+        }
+
+        const duration = process.hrtime(start);
+        const durationSeconds = duration[0] + duration[1] / 1e9;
+
+        const route = res.locals.metricRoute || 'unmatched';
+
+        const labels = {
+            method: req.method,
+            route: route,
+            status_code: String(res.statusCode)
+        };
+
+        httpRequestsTotal.inc(labels);
+if (res.statusCode >= 400) {
+    httpRequestErrors.inc(labels);
+}
+        httpRequestDuration.observe(labels, durationSeconds);
+    });
+
     next();
-});
-
-app.use((req, res, next) => {
-    let dcs = [
-        "asia-northeast2",
-        "asia-south1",
-        "europe-west3",
-        "us-east1",
-        "us-west1"
-    ];
-    let span = instana.currentSpan();
-    span.annotate('custom.sdk.tags.datacenter', dcs[Math.floor(Math.random() * dcs.length)]);
-
-    next();
-});
-
-app.use(bodyParser.urlencoded({ extended: true }));
-app.use(bodyParser.json());
-
-app.get('/health', (req, res) => {
-    var stat = {
-        app: 'OK',
-        redis: redisConnected
-    };
-    res.json(stat);
 });
 
 // Prometheus
@@ -397,6 +408,13 @@ redisClient.on('error', (e) => {
 redisClient.on('ready', (r) => {
     logger.info('Redis READY', r);
     redisConnected = true;
+});
+// Capture matched route for Prometheus metrics
+app.use((req, res, next) => {
+    res.locals.metricRoute = req.route
+        ? req.route.path
+        : 'unmatched';
+    next();
 });
 
 // fire it up!
